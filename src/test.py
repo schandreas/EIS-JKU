@@ -36,7 +36,7 @@ async def test_spi(dut):
     await ClockCycles(dut.tbspi.sclk, 5)
 
     #after reset the data should be 0
-    assert int(dut.tbspi.data) == 0
+    assert dut.tbspi.data == 0
     #without nsel the data_rdy should be 1 (ready)
     assert int(dut.tbspi.data_rdy) == 1
 
