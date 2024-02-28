@@ -36,11 +36,6 @@ module tb_spi ();
     
 
     tt_um_spi #(DATAWIDTH) spi_dut (
-    // include power ports for the Gate Level test
-    `ifdef GL_TEST
-        .VPWR( 1'b1),
-        .VGND( 1'b0),
-    `endif
         .data(data),
         .data_rdy(data_rdy),
         .nreset(nreset),

@@ -32,11 +32,6 @@ module tb_rgbled ();
     wire led;
 
     tt_um_rgbled #(3, 24) rgbled_dut (
-    // include power ports for the Gate Level test
-    `ifdef GL_TEST
-        .VPWR( 1'b1),
-        .VGND( 1'b0),
-    `endif
         .clk(clk),
         .data(data),
         .data_rdy(data_rdy),
