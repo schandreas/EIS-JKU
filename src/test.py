@@ -36,9 +36,9 @@ async def test_spi(dut):
     await ClockCycles(dut.tbspi.sclk, 5)
 
     #after reset the data should be 0
-    assert dut.tbspi.data == 0
+    assert dut.tbspi.data.value == 0
     #without nsel the data_rdy should be 1 (ready)
-    assert int(dut.tbspi.data_rdy) == 1
+    assert dut.tbspi.data_rdy.value == 1
 
     await ClockCycles(dut.tbspi.sclk, 10)
     
@@ -53,7 +53,7 @@ async def test_spi(dut):
     dut.tbspi.nsel.value = 1
     await RisingEdge(dut.tbspi.data_rdy)
     
-    assert dut.tbspi.data == 0xAA
+    assert dut.tbspi.data.value == 0xAA
 
     await ClockCycles(dut.tbspi.sclk, 10)
     
