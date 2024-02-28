@@ -1,48 +1,145 @@
+# Copyright 2023 Andreas Scharnreitner
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE−2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
+from cocotb.utils import get_sim_time
 
-
-segments = [ 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 ]
 
 @cocotb.test()
-async def test_7seg(dut):
-    dut._log.info("start")
-    clock = Clock(dut.clk, 10, units="us")
+async def test_spi(dut):
+    dut._log.info("Start SPI test")
+    clock = Clock(dut.tbspi.sclk, 10, units="us")
     cocotb.start_soon(clock.start())
 
-    # reset
-    dut._log.info("reset")
-    dut.rst_n.value = 0
-    # set the compare value
-    dut.ui_in.value = 1
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-
-    # the compare value is shifted 10 bits inside the design to allow slower counting
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
-
-        # all bidirectionals are set to output
-        assert dut.uio_oe == 0xFF
+    #setup
+    dut.tbspi.nsel.value = 1
+    dut.tbspi.mosi.value = 0
 
     # reset
-    dut.rst_n.value = 0
-    # set a different compare value
-    dut.ui_in.value = 3
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
+    dut._log.info("Reset SPI")
+    dut.tbspi.nreset.value = 0
+    await ClockCycles(dut.tbspi.sclk, 5)
+    dut.tbspi.nreset.value = 1
+    await ClockCycles(dut.tbspi.sclk, 5)
 
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
+    #after reset the data should be 0
+    assert int(dut.tbspi.data) == 0
+    #without nsel the data_rdy should be 1 (ready)
+    assert int(dut.tbspi.data_rdy) == 1
 
+    await ClockCycles(dut.tbspi.sclk, 10)
+    
+    await FallingEdge(dut.tbspi.sclk)
+    dut.tbspi.nsel.value = 0
+    await FallingEdge(dut.tbspi.data_rdy)
+    dut._log.info("SPI: Writing 0xAA")
+    for i in range(8):
+        dut.tbspi.mosi.value = i%2
+        await ClockCycles(dut.tbspi.sclk, 1)
+
+    dut.tbspi.nsel.value = 1
+    await RisingEdge(dut.tbspi.data_rdy)
+    
+    assert dut.tbspi.data == 0xAA
+
+    await ClockCycles(dut.tbspi.sclk, 10)
+    
+    await FallingEdge(dut.tbspi.sclk)
+    dut.tbspi.nsel.value = 0
+    await FallingEdge(dut.tbspi.data_rdy)
+    dut._log.info("SPI: Writing 0xB3")
+    for i in range(8):
+        dut.tbspi.mosi.value = (0xB3 >> i)&1
+        await ClockCycles(dut.tbspi.sclk, 1)
+
+    dut.tbspi.nsel.value = 1
+    await RisingEdge(dut.tbspi.data_rdy)
+    
+    assert dut.tbspi.data == 0xB3
+
+    await ClockCycles(dut.tbspi.sclk, 10)
+
+@cocotb.test()
+async def test_rgbled(dut):
+    dut._log.info("Start RGBLED test")
+    clock = Clock(dut.tbrgbled.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    #setup
+    dut.tbrgbled.data_rdy.value = 0
+
+    dut._log.info("Reset RGBLED")
+    dut.tbrgbled.nreset.value = 0
+    await ClockCycles(dut.tbrgbled.clk, 5)
+    dut.tbrgbled.nreset.value = 1
+    await ClockCycles(dut.tbrgbled.clk, 5)
+
+    dut._log.info("RGBLED Output Test")
+    dut.tbrgbled.data.value = 0x112233445566AA00FF
+    dut.tbrgbled.data_rdy.value = 1
+
+    await RisingEdge(dut.tbrgbled.data_rdy)
+
+    tim_start = get_sim_time('us')
+
+    await RisingEdge(dut.tbrgbled.led)
+    
+    assert (get_sim_time('us') - tim_start) > 50
+    tim_start = get_sim_time('ns')
+
+    await FallingEdge(dut.tbrgbled.led)
+
+    tim_mid = get_sim_time('ns')
+    assert (tim_mid - tim_start) > 650
+    assert (tim_mid - tim_start) < 950
+
+    await RisingEdge(dut.tbrgbled.led)
+    
+    assert (get_sim_time('ns') - tim_mid) > 300
+    assert (get_sim_time('ns') - tim_mid) < 600
+    
+    assert (get_sim_time('ns') - tim_start) > 650
+    assert (get_sim_time('ns') - tim_start) < 1850
+
+    for i in range(8):
+        await RisingEdge(dut.tbrgbled.led)
+    
+    tim_start = get_sim_time('ns')
+
+    await FallingEdge(dut.tbrgbled.led)
+
+    tim_mid = get_sim_time('ns')
+    assert (tim_mid - tim_start) > 250
+    assert (tim_mid - tim_start) < 550
+
+    await RisingEdge(dut.tbrgbled.led)
+    
+    assert (get_sim_time('ns') - tim_mid) > 700
+    assert (get_sim_time('ns') - tim_mid) < 1000
+    
+    assert (get_sim_time('ns') - tim_start) > 650
+    assert (get_sim_time('ns') - tim_start) < 1850
+    
+    await RisingEdge(dut.tbrgbled.rgbled_dut.do_res)
+    
+    tim_start = get_sim_time('us')
+    
+    await ClockCycles(dut.tbrgbled.clk, 10)
+    await RisingEdge(dut.tbrgbled.led)
+
+    assert (get_sim_time('us') - tim_start) > 50
+    
+    await ClockCycles(dut.tbrgbled.clk, 10)
