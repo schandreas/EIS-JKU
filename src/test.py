@@ -68,7 +68,7 @@ async def test_spi(dut):
     dut.tbspi.nsel.value = 1
     await RisingEdge(dut.tbspi.data_rdy)
     
-    assert dut.tbspi.data == 0xB3
+    assert dut.tbspi.data.value == 0xB3
 
     await ClockCycles(dut.tbspi.sclk, 10)
 
