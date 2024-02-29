@@ -20,4 +20,6 @@ module tb ();
 
     tb_rgbled tbrgbled();
 
+    tt_um_rgbled_decoder #(3,24) dec();
+
 endmodule

@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-# http://www.apache.org/licenses/LICENSE−2.0
+# http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -143,3 +143,36 @@ async def test_rgbled(dut):
     assert (get_sim_time('us') - tim_start) > 50
     
     await ClockCycles(dut.tbrgbled.clk, 10)
+
+@cocotb.test()
+async def test_comp(dut):
+    dut._log.info("Combined Test")
+    clock = Clock(dut.dec.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    sclock = Clock(dut.dec.ui_in[1], 100, units="us")
+    cocotb.start_soon(sclock.start())
+
+    dut._log.info("Reset")
+    dut.dec.ena.value = 1
+    dut.dec.rst_n.value = 0
+    dut.dec.ui_in[2].value = 1
+    dut.dec.ui_in[0].value = 0    
+
+    await ClockCycles(dut.dec.clk, 10)
+    dut.dec.rst_n.value = 1
+
+    await FallingEdge(dut.dec.spi.sclk)
+
+    dut._log.info("Put in Data")
+    dut.dec.ui_in[2].value = 0
+    for i in range(72):
+        dut.dec.ui_in[0].value = i%2
+        await FallingEdge(dut.dec.spi.sclk)
+
+    dut.dec.ui_in[2].value = 1
+
+    dut._log.info("Await Output")
+    for i in range(72):
+        await RisingEdge(dut.dec.rgbled.led)
+
+    await ClockCycles(dut.dec.spi.sclk, 10)
